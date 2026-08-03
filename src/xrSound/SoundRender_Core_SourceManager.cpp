@@ -6,7 +6,7 @@
 CSoundRender_Source* CSoundRender_Core::i_create_source(pcstr name)
 {
     // Search
-    string256 id;
+    string_path id;
     xr_strcpy(id, name);
     xr_strlwr(id);
     if (strext(id))
