@@ -103,6 +103,8 @@ void CInventoryItem::Load(LPCSTR section)
     m_weight = pSettings->r_float(section, "inv_weight");
     R_ASSERT(m_weight >= 0.f);
 
+    m_equip_weight_k = READ_IF_EXISTS(pSettings, r_float, section, "equip_weight_k", 1.0f);
+
     m_cost = pSettings->r_u32(section, "cost");
 
     // Assets follow initial SOC system, where slots start from -1

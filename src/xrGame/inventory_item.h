@@ -148,6 +148,13 @@ public:
     virtual float Weight() const { return m_weight; }
     void SetWeight(float w) { m_weight = w; }
 
+    // Dead Air: optional per-section override for how much of this item's weight counts toward
+    // player encumbrance while it sits in its inventory slot (worn/holstered) rather than in the
+    // rucksack. 1.0 = no discount. Used for items whose weight-discount category can't be told
+    // apart by C++ class alone (e.g. handheld devices vs. real detectors both being CSimpleDetector).
+    // See CInventory::CalcTotalWeight().
+    float EquipWeightFactor() const { return m_equip_weight_k; }
+
 public:
     CInventory* m_pInventory{};
     shared_str m_section_id;
@@ -194,6 +201,7 @@ public:
 protected:
     u32 m_cost;
     float m_weight;
+    float m_equip_weight_k{ 1.0f };
     float m_fCondition{ 1.0f };
     u32 m_weapon_condition_type{ 0 };
     shared_str m_Description;
