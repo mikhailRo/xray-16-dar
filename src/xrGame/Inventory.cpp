@@ -5,6 +5,8 @@
 #include "trade.h"
 #include "Weapon.h"
 #include "Grenade.h"
+#include "WeaponBinoculars.h"
+#include "ActorHelmet.h"
 
 #include "ui/UIInventoryUtilities.h"
 #include "ui/UIActorMenu.h"
@@ -415,6 +417,12 @@ bool CInventory::Slot(u16 slot_id, PIItem pIItem, bool bNotActivate, bool strict
     m_pOwner->OnItemSlot(pIItem, pIItem->m_ItemCurrPlace);
     pIItem->m_ItemCurrPlace.type = eItemPlaceSlot;
     pIItem->m_ItemCurrPlace.slot_id = slot_id;
+
+    // Recalculated after the place-type change above: CalcTotalWeight() reads each item's
+    // CurrPlace() to decide whether Dead Air's equip-weight discount applies.
+    CalcTotalWeight();
+    InvalidateState();
+
     pIItem->OnMoveToSlot(p);
 
     pIItem->object().processing_activate();
@@ -446,11 +454,14 @@ bool CInventory::Belt(PIItem pIItem, bool strict_placement)
             m_ruck.erase(it);
     }
 
+    SInvItemPlace p = pIItem->m_ItemCurrPlace;
+    pIItem->m_ItemCurrPlace.type = eItemPlaceBelt;
+
+    // Recalculated after the place-type change above: CalcTotalWeight() reads each item's
+    // CurrPlace() to decide whether Dead Air's equip-weight discount applies.
     CalcTotalWeight();
     InvalidateState();
 
-    SInvItemPlace p = pIItem->m_ItemCurrPlace;
-    pIItem->m_ItemCurrPlace.type = eItemPlaceBelt;
     m_pOwner->OnItemBelt(pIItem, p);
     pIItem->OnMoveToBelt(p);
 
@@ -510,12 +521,15 @@ bool CInventory::Ruck(PIItem pIItem, bool strict_placement)
 
     m_ruck.insert(m_ruck.end(), pIItem);
 
+    SInvItemPlace prev_place = pIItem->m_ItemCurrPlace;
+    pIItem->m_ItemCurrPlace.type = eItemPlaceRuck;
+
+    // Recalculated after the place-type change above: CalcTotalWeight() reads each item's
+    // CurrPlace() to decide whether Dead Air's equip-weight discount applies.
     CalcTotalWeight();
     InvalidateState();
 
-    m_pOwner->OnItemRuck(pIItem, pIItem->m_ItemCurrPlace);
-    SInvItemPlace prev_place = pIItem->m_ItemCurrPlace;
-    pIItem->m_ItemCurrPlace.type = eItemPlaceRuck;
+    m_pOwner->OnItemRuck(pIItem, prev_place);
     pIItem->OnMoveToRuck(prev_place);
 
     if (in_slot)
@@ -996,11 +1010,50 @@ float CInventory::TotalWeight() const
     return m_fTotalWeight;
 }
 
+namespace
+{
+// Dead Air: an item worn/holstered in its own inventory slot burdens the player less than the
+// same item loose in the rucksack or on the belt. Percentages match the original Dead Air balance.
+constexpr float kEquipWeightK_Weapon = 0.27f; // knife / sidearm / primary / secondary
+constexpr float kEquipWeightK_OutfitOrBackpack = 0.27f; // outfit, helmet, backpack (incl. exoskeleton)
+constexpr float kEquipWeightK_GrenadeOrDevice = 0.20f; // grenades, handheld devices (flashlight, lighter, ...)
+
+float GetEquippedWeightFactor(PIItem item)
+{
+    // Binoculars are CWeapon-derived (they share the grenade quick-slot) but are not part of
+    // Dead Air's equip-weight-discount list, so they must be excluded before the CWeapon check below.
+    if (smart_cast<CWeaponBinoculars*>(item))
+        return 1.0f;
+
+    if (smart_cast<CWeapon*>(item))
+        return kEquipWeightK_Weapon;
+
+    if (smart_cast<CGrenade*>(item))
+        return kEquipWeightK_GrenadeOrDevice;
+
+    if (smart_cast<CCustomOutfit*>(item) || smart_cast<CHelmet*>(item))
+        return kEquipWeightK_OutfitOrBackpack;
+
+    if (item->BaseSlot() == BACKPACK_SLOT)
+        return kEquipWeightK_OutfitOrBackpack; // covers CBackpack and the SCRPTART "backpack" artefacts
+
+    // Handheld devices (flashlight/lighter/glowstick) share their C++ class with real anomaly
+    // detectors, so they can't be told apart by smart_cast — tagged data-side instead (see
+    // items_devices.ltx [detector_fake] `equip_weight_k`). Defaults to 1.0 for everything else
+    // (real detectors, PDA, torch, worn artefact, bolt, binoculars) which Dead Air leaves untouched.
+    return item->EquipWeightFactor();
+}
+} // namespace
+
 float CInventory::CalcTotalWeight()
 {
     float weight = 0;
     for (TIItemContainer::const_iterator it = m_all.begin(); m_all.end() != it; ++it)
-        weight += (*it)->Weight();
+    {
+        PIItem item = *it;
+        float k = (item->CurrPlace() == eItemPlaceSlot) ? GetEquippedWeightFactor(item) : 1.0f;
+        weight += item->Weight() * k;
+    }
 
     m_fTotalWeight = weight;
     return m_fTotalWeight;
