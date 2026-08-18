@@ -143,21 +143,6 @@ void CRenderTarget::phase_combine()
 
             sunclr.set(L_clr.x, L_clr.y, L_clr.z, L_spec);
             sundir.set(L_dir.x, L_dir.y, L_dir.z, 0);
-
-            // [PPDBG] log environment lighting to catch "level goes dark / no skybox light" after in-session load.
-            {
-                static u32 s_ppdbg_env_last = 0;
-                if (Device.dwFrame - s_ppdbg_env_last >= 120)
-                {
-                    s_ppdbg_env_last = Device.dwFrame;
-                    Msg("[PPDBG] env f=%u amb=(%.3f,%.3f,%.3f) envclr=(%.3f,%.3f,%.3f) fog=(%.3f,%.3f,%.3f) "
-                        "sun=(%.3f,%.3f,%.3f) sunLum=%.3f lumAmb=%.3f lumHemi=%.3f",
-                        Device.dwFrame, envdesc.ambient.x, envdesc.ambient.y, envdesc.ambient.z,
-                        envdesc.env_color.x, envdesc.env_color.y, envdesc.env_color.z, envdesc.fog_color.x,
-                        envdesc.fog_color.y, envdesc.fog_color.z, L_clr.x, L_clr.y, L_clr.z, ps_r2_sun_lumscale,
-                        ps_r2_sun_lumscale_amb, ps_r2_sun_lumscale_hemi);
-                }
-            }
         }
 
         /*

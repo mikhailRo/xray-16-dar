@@ -36,8 +36,6 @@ CDialogHolder::~CDialogHolder()
 
 void CDialogHolder::StartMenu(CUIDialogWnd* pDialog, bool bDoHideIndicators)
 {
-    Msg("[ESCDBG] StartMenu %s frame=%d", pDialog->GetDebugType(), Device.dwFrame);
-
     // PDA and the actor menu (inventory/trade/upgrade/deadbody-search) are meant to be mutually exclusive
     // full-screen UI layers - opening one is supposed to hide the other (ShowActorMenu()/ShowPdaMenu(),
     // HidePdaMenu() in StartTrade/StartUpgrade). Not every path that can show one of them is guaranteed to
@@ -57,7 +55,6 @@ void CDialogHolder::StartMenu(CUIDialogWnd* pDialog, bool bDoHideIndicators)
             pcstr otherType = other->GetDebugType();
             if (!xr_strcmp(otherType, "CUIPdaWnd") || !xr_strcmp(otherType, "CUIActorMenu"))
             {
-                Msg("[ESCDBG] StartMenu %s: force-hiding stacked %s first", thisType, otherType);
                 other->HideDialog();
                 break; // HideDialog() mutates m_input_receivers - stop iterating immediately
             }
@@ -108,7 +105,6 @@ void CDialogHolder::StartMenu(CUIDialogWnd* pDialog, bool bDoHideIndicators)
 
 void CDialogHolder::StopMenu(CUIDialogWnd* pDialog)
 {
-    Msg("[ESCDBG] StopMenu %s frame=%d", pDialog->GetDebugType(), Device.dwFrame);
     R_ASSERT(pDialog->IsShown());
 
     if (TopInputReceiver() == pDialog)
@@ -327,28 +323,13 @@ void CDialogHolder::UpdateCursorVisibility()
     }
 }
 
-static bool ESCDBG_Interesting(int dik)
-{
-    return dik == SDL_SCANCODE_ESCAPE || dik == SDL_SCANCODE_I || dik == SDL_SCANCODE_P;
-}
-
 bool CDialogHolder::IR_UIOnKeyboardPress(int dik)
 {
-    const bool dbg = ESCDBG_Interesting(dik);
     CUIDialogWnd* TIR = TopInputReceiver();
     if (!TIR)
-    {
-        if (dbg) Msg("[ESCDBG] IR_UIOnKeyboardPress dik=%d TIR=null", dik);
         return false;
-    }
     if (!TIR->IR_process())
-    {
-        if (dbg) Msg("[ESCDBG] IR_UIOnKeyboardPress dik=%d TIR=%s IR_process=false Paused=%d", dik, TIR->GetDebugType(),
-            Device.Paused());
         return false;
-    }
-    if (dbg) Msg("[ESCDBG] IR_UIOnKeyboardPress dik=%d TIR=%s IR_process=true Paused=%d", dik, TIR->GetDebugType(),
-        Device.Paused());
 
     // mouse click
     if (dik == MOUSE_1 || dik == MOUSE_2 || dik == MOUSE_3)
@@ -361,11 +342,7 @@ bool CDialogHolder::IR_UIOnKeyboardPress(int dik)
     }
 
     if (TIR->OnKeyboardAction(dik, WINDOW_KEY_PRESSED))
-    {
-        if (dbg) Msg("[ESCDBG] TIR->OnKeyboardAction(%d) returned true (%s)", dik, TIR->GetDebugType());
         return true;
-    }
-    if (dbg) Msg("[ESCDBG] TIR->OnKeyboardAction(%d) returned false (%s)", dik, TIR->GetDebugType());
 
     if (UI().GetUICursor().IsVisible() && dik > XR_CONTROLLER_BUTTON_INVALID && dik < XR_CONTROLLER_BUTTON_MAX)
     {

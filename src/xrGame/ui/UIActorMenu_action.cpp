@@ -409,14 +409,8 @@ bool CUIActorMenu::OnKeyboardAction(int dik, EUIMessages keyboard_action)
         return true;
     }
 
-    const bool escdbg = (dik == SDL_SCANCODE_ESCAPE || dik == SDL_SCANCODE_I);
-    if (escdbg) Msg("[ESCDBG] CUIActorMenu::OnKeyboardAction dik=%d action=%d", dik, (int)keyboard_action);
-
     if (inherited::OnKeyboardAction(dik, keyboard_action))
-    {
-        if (escdbg) Msg("[ESCDBG] CUIActorMenu inherited::OnKeyboardAction consumed it");
         return true;
-    }
 
     if (IsBinded(kDROP, dik))
     {
@@ -448,8 +442,6 @@ bool CUIActorMenu::OnKeyboardAction(int dik, EUIMessages keyboard_action)
     if (IsBinded(kQUIT, dik) || IsBinded(kINVENTORY, dik) ||
         IsBinded(kUI_BACK, dik, EKeyContext::UI))
     {
-        if (escdbg) Msg("[ESCDBG] CUIActorMenu matched exit-bind dik=%d kQUIT=%d kINVENTORY=%d kUI_BACK=%d", dik,
-            IsBinded(kQUIT, dik), IsBinded(kINVENTORY, dik), IsBinded(kUI_BACK, dik, EKeyContext::UI));
         if (WINDOW_KEY_PRESSED == keyboard_action)
         {
             OnBtnExitClicked(this, nullptr);
@@ -457,7 +449,6 @@ bool CUIActorMenu::OnKeyboardAction(int dik, EUIMessages keyboard_action)
         return true;
     }
 
-    if (escdbg) Msg("[ESCDBG] CUIActorMenu no bind matched dik=%d, returning false", dik);
     return false;
 }
 
@@ -485,10 +476,8 @@ void CUIActorMenu::OnPressUserKey(bool take)
 
 void CUIActorMenu::OnBtnExitClicked(CUIWindow* w, void* d)
 {
-    Msg("[ESCDBG] CUIActorMenu::OnBtnExitClicked IsShown=%d", IsShown());
     g_btnHint->Discard();
     HideDialog();
-    Msg("[ESCDBG] CUIActorMenu::OnBtnExitClicked after HideDialog IsShown=%d", IsShown());
 }
 
 void CUIActorMenu::OnMesBoxYes(CUIWindow*, void*)
