@@ -1104,7 +1104,6 @@ void CScriptGameObject::enable_night_vision(bool value)
             LuaMessageType::Error, "CTorch : cannot access class member enable_night_vision!");
         return;
     }
-    Msg("[PPDBG-NV] caller: script enable_night_vision(%d)", value ? 1 : 0);
     // The script owns night vision from now on; the engine's kNIGHT_VISION binding must stand down,
     // otherwise both toggle on the same key press and cancel each other out.
     torch->set_night_vision_script_driven();

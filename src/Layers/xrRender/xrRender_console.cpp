@@ -191,8 +191,6 @@ float ps_r2_df_parallax_h = 0.02f;
 float ps_r2_df_parallax_range = 75.f;
 float ps_r2_tonemap_middlegray = 1.f; // r2-only
 float ps_r2_tonemap_adaptation = 1.f; // r2-only
-float ps_dbg_exposure = -1.f; // [PPDBG] <0 normal; >=0 forces fixed rt_LUM luminance (diagnose dark-after-load)
-float ps_dbg_slight_boost = 1.f; // [PPDBG] runtime multiplier on EVERY spot light's color in accum_spot (1=normal). Diagnose dynamic-light dimness live.
 float ps_r2_tonemap_low_lum = 0.0001f; // r2-only
 float ps_r2_tonemap_amount = 0.7f; // r2-only
 float ps_r2_ls_bloom_kernel_g = 3.f; // r2-only
@@ -846,8 +844,6 @@ void xrRender_initconsole()
     CMD3(CCC_Mask, "r2_tonemap", &ps_r2_ls_flags, R2FLAG_TONEMAP);
     CMD4(CCC_Float, "r2_tonemap_middlegray", &ps_r2_tonemap_middlegray, 0.0f, 2.0f);
     CMD4(CCC_Float, "r2_tonemap_adaptation", &ps_r2_tonemap_adaptation, 0.01f, 10.0f);
-    CMD4(CCC_Float, "dbg_exposure", &ps_dbg_exposure, -1.0f, 100.0f);
-    CMD4(CCC_Float, "dbg_slight_boost", &ps_dbg_slight_boost, 0.0f, 1000.0f);
     CMD4(CCC_Float, "r2_tonemap_lowlum", &ps_r2_tonemap_low_lum, 0.0001f, 1.0f);
     CMD4(CCC_Float, "r2_tonemap_amount", &ps_r2_tonemap_amount, 0.0000f, 1.0f);
     CMD4(CCC_Float, "r2_ls_bloom_kernel_scale", &ps_r2_ls_bloom_kernel_scale, 0.5f, 2.f);

@@ -121,16 +121,12 @@ void CTorch::SwitchNightVision(bool vision_on, bool use_sounds)
     if (!m_bNightVisionEnabled)
         return;
 
-    const bool was_on = m_bNightVisionOn;
     m_bNightVisionOn = vision_on;
 
     CActor* pA = smart_cast<CActor*>(H_Parent());
     if (!pA)
         return; // NPC torches: no post-process to drive
 
-    // [PPDBG-NV] one line per actual toggle of the player's night vision.
-    Msg("[PPDBG-NV] SwitchNightVision(on=%d snd=%d) f=%u wasOn=%d", vision_on ? 1 : 0, use_sounds ? 1 : 0,
-        Device.dwFrame, was_on ? 1 : 0);
     if (!m_night_vision)
         m_night_vision = xr_new<CNightVisionEffector>(cNameSect());
 
@@ -165,10 +161,6 @@ void CTorch::SwitchNightVision(bool vision_on, bool use_sounds)
 
     bool bIsActiveNow = m_night_vision->IsActive();
 
-    Msg("[PPDBG-NV]   map='%s' allowed=%d helmet='%s' outfit='%s' activeNow=%d", curr_map, b_allow ? 1 : 0,
-        pHelmet ? pHelmet->m_NightVisionSect.c_str() : "<no helmet>",
-        pOutfit ? pOutfit->m_NightVisionSect.c_str() : "<no outfit>", bIsActiveNow ? 1 : 0);
-
     if (m_bNightVisionOn)
     {
         if (!bIsActiveNow)
@@ -183,7 +175,6 @@ void CTorch::SwitchNightVision(bool vision_on, bool use_sounds)
                 m_night_vision->Start(pOutfit->m_NightVisionSect, pA, use_sounds);
                 return;
             }
-            Msg("[PPDBG-NV]   bail: neither helmet nor outfit has nightvision_sect");
             m_bNightVisionOn = false; // in case if there is no nightvision in helmet and outfit
         }
     }
@@ -191,7 +182,6 @@ void CTorch::SwitchNightVision(bool vision_on, bool use_sounds)
     {
         if (bIsActiveNow)
         {
-            Msg("[PPDBG-NV]   -> Stop()");
             m_night_vision->Stop(100000.0f, use_sounds);
         }
     }
@@ -221,11 +211,6 @@ void CTorch::Switch(bool light_on)
                 m_sounds.PlaySound("SndTurnOff", pActor->Position(), NULL, !!pActor->HUDview());
         }
     }
-
-    if (pActor && m_switched_on != light_on)
-        Msg("[PPDBG-TORCHSWITCH] actor torch %d -> %d (cust1=%d cust2=%d en2=%d enabled=%d) frame=%u",
-            m_switched_on, light_on, m_torch_customized, m_torch2_customized, m_torch2_enabled, enabled(),
-            Device.dwFrame);
 
     m_switched_on = light_on;
     if (can_use_dynamic_lights())
@@ -283,8 +268,6 @@ bool CTorch::net_Spawn(CSE_Abstract* DC)
     lanim = (color_anim_name && color_anim_name[0] && 0 != xr_stricmp(color_anim_name, "empty"))
         ? LALib.FindItem(color_anim_name)
         : nullptr;
-    Msg("[PPDBG-TORCHSPAWN] color_animator='%s' -> lanim=%s visual='%s'", color_anim_name,
-        lanim ? "NON-NULL(animated)" : "null(static)", torch->get_visual());
     guid_bone = K->LL_BoneID(pUserData->r_string(TORCH_DEFINITION, "guide_bone"));
     VERIFY(guid_bone != BI_NONE);
 
@@ -412,30 +395,10 @@ void CTorch::UpdateCL()
     // and gating on it made this re-assert dead code.
     if (m_torch_customized && !m_switched_on && smart_cast<CActor*>(H_Parent()))
     {
-        Msg("[PPDBG-TORCHFORCE] re-asserting actor torch ON (cust1=%d cust2=%d en2=%d enabled=%d) frame=%u",
-            m_torch_customized, m_torch2_customized, m_torch2_enabled, enabled(), Device.dwFrame);
         // Setting the flag first suppresses Switch()'s turn-on sound: this is the engine re-asserting a
         // state the mod considers permanent, not the player flicking a switch, so it must stay silent.
         m_switched_on = true;
         Switch(true);
-    }
-
-    // [PPDBG] actor-torch state dump. Deliberately ABOVE the m_switched_on guard: the failing case for the
-    // glowstick was precisely m_switched_on == false, which the old placement could never observe.
-    if (smart_cast<CActor*>(H_Parent()))
-    {
-        static u32 s_ppdbg_state_lf = 0;
-        if (Device.dwFrame - s_ppdbg_state_lf > 30)
-        {
-            s_ppdbg_state_lf = Device.dwFrame;
-            Msg("[PPDBG-TORCHSTATE] on=%d en=%d cust1=%d spot=%d c1(%.2f,%.2f,%.2f) rng1=%.1f | cust2=%d en2=%d "
-                "2c(%.2f,%.2f,%.2f) rng2=%.1f | base_c(%.2f,%.2f,%.2f) base_rng=%.1f lanim=%d lr_active=%d "
-                "t2_active=%d",
-                m_switched_on, enabled(), m_torch_customized, m_torch_spot, m_torch_cr, m_torch_cg, m_torch_cb,
-                m_torch_range, m_torch2_customized, m_torch2_enabled, m_torch2_cr, m_torch2_cg, m_torch2_cb,
-                m_torch2_range, m_torch_base_cr, m_torch_base_cg, m_torch_base_cb, m_torch_base_range,
-                lanim ? 1 : 0, light_render->get_active(), light_torch2->get_active());
-        }
     }
 
     if (!m_switched_on)
@@ -728,10 +691,6 @@ void CNightVisionEffector::Start(const shared_str& sect, CActor* pA, bool play_s
 {
     m_pActor = pA;
     AddEffector(m_pActor, effNightvision, sect);
-    // [PPDBG-NV] did the pp effector actually get created and registered?
-    Msg("[PPDBG-NV]   Start(sect='%s') pp_eff_name=%s -> effector%s registered", sect.c_str(),
-        pSettings->line_exist(sect, "pp_eff_name") ? pSettings->r_string(sect, "pp_eff_name") : "<MISSING>",
-        m_pActor->Cameras().GetPPEffector((EEffectorPPType)effNightvision) ? "" : " NOT");
     if (play_sound)
     {
         PlaySounds(eStartSound);

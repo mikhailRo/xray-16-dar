@@ -133,9 +133,6 @@ void CLevel::IR_OnKeyboardPress(int key)
     // close the PDA. Without this, kQUIT (further down) sees an already-emptied screen and wrongly
     // opens the pause menu ("closing the PDA opens the menu"). See §11/§12 of the handoff.
     const bool esc_screen_was_up = b_ui_exist ? CurrentGameUI()->AnyFullscreenShown() : false;
-    if (_curr == kQUIT || key == SDL_SCANCODE_ESCAPE)
-        Msg("[ESCDBG] IR_OnKeyboardPress ESC entry: key=%d action=%d(kQUIT=%d) screenWasUp=%d b_ui=%d Paused=%d frame=%d",
-            key, _curr, kQUIT, esc_screen_was_up, b_ui_exist, Device.Paused(), Device.dwFrame);
 
     /* avo: script callback */
     if (!g_bDisableAllInput && g_actor)
@@ -202,19 +199,12 @@ void CLevel::IR_OnKeyboardPress(int key)
             {
                 const bool handled = ui->IR_UIOnKeyboardPress(key);
                 CUIDialogWnd* now = ui->TopInputReceiver();
-                Msg("[ESCDBG] kQUIT screenWasUp: tir=%s handled=%d now=%s nowShown=%d frame=%d", tir->GetDebugType(),
-                    handled, now ? now->GetDebugType() : "null", now ? now->IsShown() : -1, Device.dwFrame);
                 if (!handled || (now == tir && tir->IsShown()))
-                {
-                    Msg("[ESCDBG] kQUIT force HideDialog on %s", tir->GetDebugType());
                     tir->HideDialog();
-                }
             }
             else if (ui && !Device.Paused())
             {
-                const bool closedShown = ui->HideShownDialogs();
-                Msg("[ESCDBG] kQUIT screenWasUp: no live TIR, HideShownDialogs closedShown=%d frame=%d",
-                    closedShown, Device.dwFrame);
+                ui->HideShownDialogs();
             }
         }
         else
@@ -222,9 +212,8 @@ void CLevel::IR_OnKeyboardPress(int key)
             // Nothing was up when Escape arrived -> the player wants the pause menu. A script
             // eKeyPress callback may have spuriously opened the PDA in the meantime; close it so it
             // does not linger under/over the menu, then open the pause menu.
-            const bool closedSpurious = (ui && !Device.Paused()) ? ui->HideShownDialogs() : false;
-            Msg("[ESCDBG] kQUIT screenWasDown: closedSpurious=%d Paused=%d -> main_menu", closedSpurious,
-                Device.Paused());
+            if (ui && !Device.Paused())
+                ui->HideShownDialogs();
             Console->Execute("main_menu");
         }
         return;

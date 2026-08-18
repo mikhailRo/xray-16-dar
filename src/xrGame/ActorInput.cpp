@@ -887,11 +887,7 @@ void CActor::SwitchNightVision()
             // fixed in CActor::SwitchTorch: once a script owns the state, the engine must not
             // duplicate the key.
             if (torch->night_vision_script_driven() || torch->script_driven())
-            {
-                Msg("[PPDBG-NV] caller: engine kNIGHT_VISION binding -- skipped (script-driven)");
                 return;
-            }
-            Msg("[PPDBG-NV] caller: engine kNIGHT_VISION binding (CActor::SwitchNightVision)");
             torch->SwitchNightVision();
             return;
         }
