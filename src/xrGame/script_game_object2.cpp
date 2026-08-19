@@ -159,6 +159,7 @@ void CScriptGameObject::play_cycle(LPCSTR anim, bool mix_in)
 }
 
 void CScriptGameObject::play_cycle(LPCSTR anim) { play_cycle(anim, true); }
+bool CScriptGameObject::is_animated() const { return smart_cast<IKinematicsAnimated*>(object().Visual()) != nullptr; }
 void CScriptGameObject::Hit(CScriptHit* tpLuaHit)
 {
     CScriptHit& tLuaHit = *tpLuaHit;
