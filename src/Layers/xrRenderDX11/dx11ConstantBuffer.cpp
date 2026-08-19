@@ -7,16 +7,14 @@ namespace xray::render::RENDER_NAMESPACE
 {
 dx11ConstantBuffer::~dx11ConstantBuffer()
 {
-    for (int id = 0; id < R__NUM_CONTEXTS; ++id)
-    {
-        RImplementation.Resources->_DeleteConstantBuffer(id, this);
-    }
+    RImplementation.Resources->_DeleteConstantBuffer(m_context_id, this);
     //	Flush();
     _RELEASE(m_pBuffer);
     xr_free(m_pBufferData);
 }
 
-dx11ConstantBuffer::dx11ConstantBuffer(ID3DShaderReflectionConstantBuffer* pTable) : m_bChanged(true)
+dx11ConstantBuffer::dx11ConstantBuffer(u32 context_id, ID3DShaderReflectionConstantBuffer* pTable)
+    : m_context_id(context_id), m_bChanged(true)
 {
     D3D_SHADER_BUFFER_DESC Desc;
 
