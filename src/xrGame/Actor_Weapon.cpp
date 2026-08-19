@@ -16,6 +16,7 @@
 #include "Grenade.h"
 #include "game_base_space.h"
 #include "Artefact.h"
+#include "player_hud.h"
 
 static const float VEL_MAX = 10.f;
 static const float VEL_A_MAX = 10.f;
@@ -26,12 +27,19 @@ static const float VEL_A_MAX = 10.f;
 float CActor::GetWeaponAccuracy() const
 {
     CWeapon* W = smart_cast<CWeapon*>(inventory().ActiveItem());
+    // одна рука занята устройством (фонарь/детектор) -> стрельба одной рукой из "двуручного" по хвату пистолета
+    bool bSingleHandPenalty = W && W->IsSingleHanded() && g_player_hud && g_player_hud->attached_item(1);
 
     if (IsZoomAimingMode() && W && !GetWeaponParam(W, IsRotatingToZoom(), false))
     {
-        return m_fDispAim;
+        float dispersion = m_fDispAim;
+        if (bSingleHandPenalty)
+            dispersion *= (1.0f + m_fDispSingleHandFactor);
+        return dispersion;
     }
     float dispersion = m_fDispBase * GetWeaponParam(W, Get_PDM_Base(), 1.0f);
+    if (bSingleHandPenalty)
+        dispersion *= (1.0f + m_fDispSingleHandFactor);
 
     CEntity::SEntityState state;
     if (g_State(state))

@@ -521,6 +521,8 @@ protected:
     float m_fDispCrouchFactor;
     // crouch+no acceleration
     float m_fDispCrouchNoAccelFactor;
+    // штраф за стрельбу одной рукой, когда во второй руке фонарь/детектор
+    float m_fDispSingleHandFactor;
 
     Fvector m_vMissileOffset;
 
