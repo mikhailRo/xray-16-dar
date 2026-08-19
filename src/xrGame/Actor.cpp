@@ -451,6 +451,7 @@ void CActor::Load(LPCSTR section)
     m_fDispAccelFactor = pSettings->r_float(section, "disp_accel_factor");
     m_fDispCrouchFactor = pSettings->r_float(section, "disp_crouch_factor");
     m_fDispCrouchNoAccelFactor = pSettings->r_float(section, "disp_crouch_no_acc_factor");
+    m_fDispSingleHandFactor = READ_IF_EXISTS(pSettings, r_float, section, "disp_single_hand_factor", 0.15f);
 
     LPCSTR default_outfit = READ_IF_EXISTS(pSettings, r_string, section, "default_outfit", 0);
     SetDefaultVisualOutfit(default_outfit);
