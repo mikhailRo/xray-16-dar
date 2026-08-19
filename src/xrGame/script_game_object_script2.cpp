@@ -123,6 +123,7 @@ luabind::class_<CScriptGameObject>& script_register_game_object1(luabind::class_
         .def("hit", &CScriptGameObject::Hit)
         .def("play_cycle", (void (CScriptGameObject::*)(LPCSTR))(&CScriptGameObject::play_cycle))
         .def("play_cycle", (void (CScriptGameObject::*)(LPCSTR, bool))(&CScriptGameObject::play_cycle))
+        .def("is_animated", &CScriptGameObject::is_animated)
         .def("fov", &CScriptGameObject::GetFOV)
         .def("range", &CScriptGameObject::GetRange)
         .def("relation", &CScriptGameObject::GetRelationType)
