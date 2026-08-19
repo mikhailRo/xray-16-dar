@@ -312,6 +312,7 @@ void D3DXRenderBase::End()
 
     HW.EndScene();
     HW.Present();
+    RImplementation.Target->update_base_rt();
 }
 
 void D3DXRenderBase::ResourcesDestroyNecessaryTextures()

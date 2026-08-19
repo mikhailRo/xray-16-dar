@@ -7,6 +7,11 @@
 
 #include <SDL_syswm.h>
 
+#if __has_include(<dxgi1_5.h>)
+#include <dxgi1_5.h>
+#define HAS_DXGI1_5
+#endif
+
 namespace xray::render::RENDER_NAMESPACE
 {
 CHW HW;
@@ -348,6 +353,18 @@ bool CHW::CreateSwapChain2(HWND hwnd)
     if (!pFactory2)
         return false;
 
+    BOOL allowTearing = FALSE;
+#ifdef HAS_DXGI1_5
+    {
+        IDXGIFactory5* pFactory5{};
+        if (SUCCEEDED(pFactory2->QueryInterface(__uuidof(IDXGIFactory5), (void**)&pFactory5)) && pFactory5)
+        {
+            pFactory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
+            _RELEASE(pFactory5);
+        }
+    }
+#endif
+
     // Set up the presentation parameters
     DXGI_SWAP_CHAIN_DESC1 desc{};
 
@@ -367,17 +384,30 @@ bool CHW::CreateSwapChain2(HWND hwnd)
     Caps.fTarget = dx11TextureUtils::ConvertTextureFormat(desc.Format);
 
     // Buffering
-    BackBufferCount = 1; // For DXGI_SWAP_EFFECT_FLIP_DISCARD we need at least two
-    desc.BufferCount = BackBufferCount;
+    // NOTE: DXGI_SWAP_EFFECT_FLIP_DISCARD requires >= 2 buffers at the DXGI
+    // level, but GetBuffer() only ever allows index 0 on a flip-model swap
+    // chain -- indices >0 aren't independently accessible the way they were
+    // for the old DISCARD (blt) model. HW.BackBufferCount intentionally stays
+    // 1: it's what r2_rendertarget.cpp uses to size rt_Base (the app-visible
+    // set of swap-chain-backed render targets), which must only ever contain
+    // index 0. desc.BufferCount below is the separate DXGI-internal buffer
+    // count and is not tied to HW.BackBufferCount.
+    BackBufferCount = 1;
+    constexpr u32 SwapChainBufferCount = 2;
+    desc.BufferCount = SwapChainBufferCount;
     desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 
     // Multisample
     desc.SampleDesc.Count = 1;
     desc.SampleDesc.Quality = 0;
 
-    // Windoze
-    //desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // XXX: tearing glitches with flip presentation model
-    desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    // Flip model lets windowed/borderless presents actually bypass the
+    // desktop compositor's vsync when the vsync option is off (the legacy
+    // DISCARD/blt model is always throttled to the compositor's refresh rate
+    // in windowed mode no matter what Present() interval is passed), and
+    // buffer index 0's identity is re-fetched every frame in
+    // CRenderTarget::update_base_rt() to match (see its comment for why).
+    desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     desc.Scaling = DXGI_SCALING_STRETCH;
 
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC fulldesc{};
@@ -385,6 +415,8 @@ bool CHW::CreateSwapChain2(HWND hwnd)
 
     // Additional setup
     desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    if (allowTearing)
+        desc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
     IDXGISwapChain1* swapchain{};
     const HRESULT result = pFactory2->CreateSwapChainForHwnd(pDevice, hwnd, &desc,
@@ -524,10 +556,17 @@ void CHW::EndScene() { }
 
 void CHW::Present()
 {
-    const bool bUseVSync = psDeviceMode.WindowStyle == rsFullscreen &&
-        psDeviceFlags.test(rsVSync); // xxx: weird tearing glitches when VSync turned on for windowed mode in DX11
+    const bool bUseVSync = psDeviceFlags.test(rsVSync);
 
-    switch (m_pSwapChain->Present(bUseVSync ? 1 : 0, 0))
+    // DXGI_PRESENT_ALLOW_TEARING is only legal with interval 0, a windowed
+    // swap chain, and a swap chain actually created with the matching
+    // ALLOW_TEARING flag (see CreateSwapChain2) -- without it, windowed
+    // presents are silently throttled to the desktop's refresh rate no
+    // matter what interval is passed.
+    const UINT presentFlags = (!bUseVSync && m_ChainDesc.Windowed &&
+        (m_ChainDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING)) ? DXGI_PRESENT_ALLOW_TEARING : 0;
+
+    switch (m_pSwapChain->Present(bUseVSync ? 1 : 0, presentFlags))
     {
     case DXGI_STATUS_OCCLUDED:
     case DXGI_ERROR_DEVICE_REMOVED:

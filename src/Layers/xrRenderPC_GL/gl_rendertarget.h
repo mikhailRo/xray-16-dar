@@ -222,6 +222,7 @@ public:
 
     GLuint get_base_rt() { return rt_Base[HW.CurrentBackBuffer]->pRT; }
     GLuint get_base_zb() { return rt_Base_Depth->pZRT; }
+    void update_base_rt() {} // no-op: GL backend doesn't use the DX11 flip presentation model
 
     void u_setrt(CBackend& cmd_list, const ref_rt& _1, const ref_rt& _2, const ref_rt& _3, const ref_rt& _zb);
     void u_setrt(CBackend& cmd_list, const ref_rt& _1, const ref_rt& _2, const ref_rt& _zb);
