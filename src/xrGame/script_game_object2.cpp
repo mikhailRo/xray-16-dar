@@ -135,6 +135,12 @@ void CScriptGameObject::set_item(
 
 void CScriptGameObject::play_cycle(LPCSTR anim, bool mix_in)
 {
+    if (!anim)
+    {
+        GEnv.ScriptEngine->script_log(LuaMessageType::Error, "CGameObject : play_cycle called with no cycle name");
+        return;
+    }
+
     IKinematicsAnimated* sa = smart_cast<IKinematicsAnimated*>(object().Visual());
     if (sa)
     {
