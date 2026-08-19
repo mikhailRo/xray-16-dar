@@ -750,6 +750,26 @@ CRenderTarget::~CRenderTarget()
     }
 }
 
+#if defined(USE_DX11)
+void CRenderTarget::update_base_rt()
+{
+    // Flip-model swap chains only ever expose buffer index 0 via GetBuffer,
+    // and that index's underlying resource identity rotates internally after
+    // every Present (see IDXGISwapChain::GetBuffer docs). rt_Base was fetched
+    // once at construction time via CRT's CreateBase path, so re-fetch it here
+    // every frame (right after HW.Present(), see D3DXRenderBase::End()) using
+    // the same destroy+recreate cycle CRT already uses for device-reset.
+    if (!HW.UsingFlipPresentationModel())
+        return;
+
+    for (auto& rt : rt_Base)
+    {
+        rt->reset_begin();
+        rt->reset_end();
+    }
+}
+#endif
+
 void CRenderTarget::reset_light_marker(CBackend& cmd_list, bool bResetStencil)
 {
     dwLightMarkerID = 5;
