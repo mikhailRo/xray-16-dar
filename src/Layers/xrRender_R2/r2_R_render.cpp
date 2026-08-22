@@ -404,6 +404,14 @@ void CRender::render_forward()
         dsgraph.PortalTraverser.fade_render(); // faded-portals
         dsgraph.render_sorted(); // strict-sorted geoms
         g_pGamePersistent->Environment().RenderLast(); // rain/thunder-bolts
+
+        // Dead Air: world-object glow dots (kerosinka lamp flame, etc) -- see CGlow/RenderGlows() in
+        // r2.cpp. Deliberately placed here, not in the later "combine" post-process phase (where it
+        // was first tried): by that point the depth buffer has already been resolved away, which is
+        // also why RenderFlares() above only draws secondary flares/gradient there, not the sun disc
+        // itself (that needs real depth occlusion too). RenderLast()'s rain/thunderbolts use this same
+        // depth-tested world-space-quad technique successfully from this exact spot.
+        RenderGlows();
     }
 }
 

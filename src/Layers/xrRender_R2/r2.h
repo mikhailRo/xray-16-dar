@@ -27,6 +27,7 @@ namespace xray::render::RENDER_NAMESPACE
 {
 class CRenderTarget;
 class dxRender_Visual;
+class CGlow;
 
 // TODO: move it into separate file.
 struct i_render_phase
@@ -462,6 +463,15 @@ public:
     // Lighting
     IRender_Light* light_create() override;
     IRender_Glow* glow_create() override;
+
+    // Dead Air: world-object glow dots (e.g. a kerosinka lamp's flame). CGlow previously stored no
+    // state and drew nothing -- see CGlow/RenderGlows() in r2.cpp for the real implementation. Glows
+    // register/unregister themselves here on construction/destruction; the vertex geometry is a
+    // single small quad buffer shared by every glow, following the same pattern
+    // dxLensFlareRender/dxThunderboltRender already use for their own world-space billboards.
+    xr_vector<CGlow*> Glows;
+    ref_geom GlowGeom;
+    void RenderGlows();
 
     // Models
     IRenderVisual* model_CreateParticles(LPCSTR name) override;

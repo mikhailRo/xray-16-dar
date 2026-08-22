@@ -114,6 +114,7 @@ public:
 };
 
 class CUIArtefactDetectorBase;
+class CLAItem;
 
 class CCustomDetector : public CHudItemObject
 {
@@ -168,6 +169,52 @@ protected:
     float m_fAfVisRadius;
     float m_fDecayRate; //Alundaio
     CAfList m_artefacts;
+
+    // Dead Air: config-driven light + glow particles for placeable detector-class devices
+    // (kerosinka lamp, dropped flashlight/glowstick/lighter) via the light_*/particles_* keys
+    // already authored on these sections in items_devices.ltx. Nothing in the engine ever read
+    // those keys -- CSimpleDetector (the C++ class backing all of them) only lit up the small HUD
+    // glow while held (see SimpleDetector.cpp), and the actor's own headlamp light (CTorch) only
+    // covers whichever device is in-hand. A device set on the ground has no H_Parent and no
+    // handheld light to ride, so it was completely dark. This adds a light + particle effect that
+    // lives on the object itself and is only active while it has no parent (i.e. lying in the
+    // world), so it never fights with the in-hand behavior. See CCustomDetector::UpdateWorldLight().
+    void UpdateWorldLight();
+    void StartWorldLight();
+    void StopWorldLight();
+
+    bool m_bWorldLightEnabled{false};
+    bool m_bWorldLightSpot{false};
+    bool m_bWorldLightShadow{false};
+    bool m_bWorldLightVolumetric{false};
+    float m_fWorldLightRange{0.f};
+    float m_fWorldLightBrightness{1.f};
+    float m_fWorldLightCone{0.f};
+    Fcolor m_WorldLightColor{0.f, 0.f, 0.f, 1.f};
+    // Kept parsed (not currently consulted for positioning -- see UpdateWorldLight()) as reference
+    // data for whoever revisits the flame-glow work; light_bone is the actor hand-attach point for
+    // this model, not the flame, and touching IKinematics to resolve/use a bone here previously
+    // reproduced a destroy/recreate churn on this object -- see [[dar3-kerosinka-no-light-on-ground]].
+    shared_str m_sWorldLightBoneName;
+    CLAItem* m_pWorldLightAnim{nullptr};
+    ref_light m_pWorldLight;
+    // A visible bright dot at the light source itself -- an IRender_Light only illuminates OTHER
+    // surfaces, it draws nothing at its own position, which is why the environment lit up correctly
+    // but the lamp's glass looked dark. Same lightweight billboard sprite CTorch/CHangingLamp/CFlare
+    // use for this (glow_create()), not a skeleton-driven particle emitter, so it doesn't touch the
+    // object's kinematics and hasn't reproduced the destroy/recreate churn particles did. Currently
+    // non-functional for an unrelated reason (the engine's glow rendering never actually draws
+    // anything in this build) -- see project memory for the full investigation.
+    ref_glow m_pWorldGlow;
+    // Re-sampled from XFORM() every tick in UpdateWorldLight() (not cached once) -- see the comment
+    // there for why "once" doesn't work for this object.
+    Fmatrix m_WorldLightXf{};
+
+    bool m_bWorldParticlesEnabled{false};
+    shared_str m_sWorldParticlesName;
+    // Same "kept for reference, not currently used" status as m_sWorldLightBoneName above.
+    shared_str m_sWorldParticlesBoneName;
+    CParticlesObject* m_pWorldParticles{nullptr};
 };
 
 class CZoneList : public CDetectList<CCustomZone>

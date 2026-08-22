@@ -21,22 +21,109 @@ namespace xray::render::RENDER_NAMESPACE
 CRender RImplementation;
 
 //////////////////////////////////////////////////////////////////////////
+// Dead Air: CGlow used to be a pure no-op stub -- every setter had an empty body, so glow_create()
+// callers (CTorch/CHangingLamp/CFlare's flame dot, and now CCustomDetector's world-light glow) built
+// and configured an object that never drew anything, silently. This is a real implementation: a
+// single camera-facing billboard quad per glow, drawn with the existing "effects\flare" shader
+// technique (already used and proven for sun lens-flares) and normal depth testing, so it's occluded
+// by geometry like any other world object instead of shining through walls. See RenderGlows() below
+// for the actual draw call and CRender::create()/destroy() for the shared geometry buffer's lifetime.
 class CGlow : public IRender_Glow
 {
 public:
     bool bActive;
+    Fvector vPosition;
+    Fvector vDirection;
+    float fRadius;
+    Fcolor cColor;
+    ref_shader hShader;
 
 public:
-    CGlow() : bActive(false) {}
+    CGlow() : bActive(false), fRadius(0.25f)
+    {
+        vPosition.set(0.f, 0.f, 0.f);
+        vDirection.set(0.f, 0.f, 1.f);
+        cColor.set(1.f, 1.f, 1.f, 1.f);
+        RImplementation.Glows.push_back(this);
+    }
+    virtual ~CGlow()
+    {
+        xr_vector<CGlow*>& glows = RImplementation.Glows;
+        auto it = std::find(glows.begin(), glows.end(), this);
+        if (it != glows.end())
+            glows.erase(it);
+    }
     virtual void set_active(bool b) { bActive = b; }
     virtual bool get_active() { return bActive; }
-    virtual void set_position(const Fvector& P) {}
-    virtual void set_direction(const Fvector& D) {}
-    virtual void set_radius(float R) {}
-    virtual void set_texture(LPCSTR name) {}
-    virtual void set_color(const Fcolor& C) {}
-    virtual void set_color(float r, float g, float b) {}
+    virtual void set_position(const Fvector& P) { vPosition = P; }
+    virtual void set_direction(const Fvector& D) { vDirection = D; }
+    virtual void set_radius(float R) { fRadius = R; }
+    virtual void set_texture(LPCSTR name)
+    {
+        if (name && name[0])
+            hShader.create("effects\\flare", name);
+        else
+            hShader.destroy();
+    }
+    virtual void set_color(const Fcolor& C) { cColor = C; }
+    virtual void set_color(float r, float g, float b) { cColor.set(r, g, b, 1.f); }
 };
+
+// Dead Air / [[dar3-kerosinka-no-light-on-ground]]: as of this writing the draw call below still
+// produces no visible output in-game, for a reason not yet root-caused -- confirmed (via temporary
+// diagnostic logging, since removed) that Glows correctly contains active, positioned, shaded entries
+// and that RenderGlows() runs every frame, then confirmed (via a temporary forced 3-unit
+// fully-opaque-white no-depth-test override, since reverted) that even an unmissable version of the
+// quad never appears on screen. That rules out state/position/activation bugs on the C++ side; the
+// remaining suspects are all render-pipeline-level (wrong render target bound at this call site
+// despite u_setrt targeting rt_Generic_0_r in r4_rendertarget_phase_combine.cpp, the "effects\flare"
+// shader silently failing to bind a real pass despite ref_shader being non-null, or something about
+// this D3DPT_TRIANGLELIST draw call itself) and need actual GPU frame-capture tooling (e.g. RenderDoc)
+// to diagnose further, which wasn't available in that session. Left in place, inactive-looking but
+// harmless, for whoever picks this up next -- see the memory file for the full investigation log.
+void CRender::RenderGlows()
+{
+    if (Glows.empty())
+        return;
+
+    if (!GlowGeom)
+        GlowGeom.create(FVF::F_LIT, RImplementation.Vertex.Buffer(), RImplementation.QuadIB);
+
+    for (CGlow* glow : Glows)
+    {
+        if (!glow->bActive || !glow->hShader || glow->fRadius <= 0.f)
+            continue;
+
+        Fvector vecSx, vecSy;
+        vecSx.mul(Device.vCameraRight, glow->fRadius);
+        vecSy.mul(Device.vCameraTop, glow->fRadius);
+
+        u32 VS_Offset;
+        FVF::LIT* pv = (FVF::LIT*)RImplementation.Vertex.Lock(4, GlowGeom.stride(), VS_Offset);
+        u32 c = glow->cColor.get();
+        const Fvector& P = glow->vPosition;
+        pv->set(P.x + vecSx.x - vecSy.x, P.y + vecSx.y - vecSy.y, P.z + vecSx.z - vecSy.z, c, 0, 0);
+        pv++;
+        pv->set(P.x + vecSx.x + vecSy.x, P.y + vecSx.y + vecSy.y, P.z + vecSx.z + vecSy.z, c, 0, 1);
+        pv++;
+        pv->set(P.x - vecSx.x - vecSy.x, P.y - vecSx.y - vecSy.y, P.z - vecSx.z - vecSy.z, c, 1, 0);
+        pv++;
+        pv->set(P.x - vecSx.x + vecSy.x, P.y - vecSx.y + vecSy.y, P.z - vecSx.z + vecSy.z, c, 1, 1);
+        RImplementation.Vertex.Unlock(4, GlowGeom.stride());
+
+        RCache.set_xform_world(Fidentity);
+        RCache.set_Geometry(GlowGeom);
+        RCache.set_Shader(glow->hShader);
+        // Normal depth test (unlike the sun's lens flare, which is drawn effectively at infinity and
+        // doesn't need one): a world-positioned glow should be hidden by geometry in front of it, the
+        // same as dxThunderboltRender's world-space gradient quads do for the same reason.
+#if defined(USE_DX11) // XXX: check if it's needed on OGL (matches dxThunderboltRender's own guard)
+        RCache.set_Z(TRUE);
+        RCache.set_ZFunc(D3DCMP_LESSEQUAL);
+#endif
+        RCache.Render(D3DPT_TRIANGLELIST, VS_Offset, 0, 4, 0, 2);
+    }
+}
 
 float r_dtex_range = 50.f;
 //////////////////////////////////////////////////////////////////////////
@@ -535,6 +622,7 @@ void CRender::destroy()
     xr_delete(Target);
     PSLibrary.OnDestroy();
     Device.seqFrame.Remove(this);
+    GlowGeom.destroy();
 }
 
 void CRender::reset_begin()
