@@ -14,6 +14,7 @@
 #include "CustomOutfit.h"
 #include "ActorHelmet.h"
 #include "UIHelper.h"
+#include "ExplosiveItem.h"
 
 CUICellItem* CUICellItem::m_mouse_selected_item = NULL;
 
@@ -257,6 +258,24 @@ void CUICellItem::UpdateConditionProgressBar()
 
                     m_pConditionState->UseGradient(false);
                 }
+            }
+            else if (smart_cast<CExplosiveItem*>(itm))
+            {
+                // fuel containers (jerrycans, gas balloons) store liters-remaining/8 in
+                // "condition"; re-derive the discrete liter count and center it the same
+                // way the eatable-item branch above does, so it lands on a clean segment
+                // boundary instead of between two segments once quantized to 13ths below
+                const u8 liters = (u8)(cond * 8.0f + 0.5f);
+                if (liters < 1)
+                    cond = 0.f;
+                else
+                    cond = (float)liters * 0.125f - 0.0625f;
+
+                // hide the empty-tick background so only the filled liters are visible,
+                // not the whole 8-liter scale, and keep the fill a flat color rather than
+                // the usual red/yellow/green wear gradient (liters aren't wear)
+                m_pConditionState->ShowBackground(false);
+                m_pConditionState->UseGradient(false);
             }
 
             Ivector2 itm_grid_size = GetGridSize();
