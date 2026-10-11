@@ -414,60 +414,67 @@ int CApplication::Run()
     {
         FrameMarkStart(FRAME_MARK_APPLICATION_RUN);
         bool canCallActivate = false;
-        bool shouldActivate = false;
 
         SDL_Event events[MAX_WINDOW_EVENTS];
-        const int count = SDL_PeepEvents(events, MAX_WINDOW_EVENTS,
-            SDL_GETEVENT, SDL_WINDOWEVENT, SDL_WINDOWEVENT);
-
-        for (int i = 0; i < count; ++i)
+        int count;
+        // A display reset can queue more than one batch of transient window
+        // events. Drain them before notifying the fullscreen renderer.
+        while ((count = SDL_PeepEvents(events, MAX_WINDOW_EVENTS,
+            SDL_GETEVENT, SDL_WINDOWEVENT, SDL_WINDOWEVENT)) > 0)
         {
-            const SDL_Event event = events[i];
 
-            switch (event.type)
+            for (int i = 0; i < count; ++i)
             {
-            case SDL_WINDOWEVENT:
-            {
-                const auto window = SDL_GetWindowFromID(event.window.windowID);
+                const SDL_Event event = events[i];
 
-                switch (event.window.event)
+                switch (event.type)
                 {
-                case SDL_WINDOWEVENT_SHOWN:
-                case SDL_WINDOWEVENT_FOCUS_GAINED:
-                case SDL_WINDOWEVENT_RESTORED:
-                case SDL_WINDOWEVENT_MAXIMIZED:
-                    if (window != Device.m_sdlWnd)
-                        Device.OnWindowActivate(window, true);
-                    else
+                case SDL_WINDOWEVENT:
+                {
+                    const auto window = SDL_GetWindowFromID(event.window.windowID);
+
+                    switch (event.window.event)
                     {
-                        canCallActivate = true;
-                        shouldActivate = true;
-                    }
-                    continue;
+                    case SDL_WINDOWEVENT_SHOWN:
+                    case SDL_WINDOWEVENT_FOCUS_GAINED:
+                    case SDL_WINDOWEVENT_RESTORED:
+                    case SDL_WINDOWEVENT_MAXIMIZED:
+                        if (window != Device.m_sdlWnd)
+                            Device.OnWindowActivate(window, true);
+                        else
+                        {
+                            canCallActivate = true;
+                        }
+                        continue;
 
-                case SDL_WINDOWEVENT_HIDDEN:
-                case SDL_WINDOWEVENT_FOCUS_LOST:
-                case SDL_WINDOWEVENT_MINIMIZED:
-                    if (window != Device.m_sdlWnd)
-                        Device.OnWindowActivate(window, false);
-                    else
-                    {
-                        canCallActivate = true;
-                        shouldActivate = false;
-                    }
-                    continue;
-                } // switch (event.window.event)
-            }
-            } // switch (event.type)
+                    case SDL_WINDOWEVENT_HIDDEN:
+                    case SDL_WINDOWEVENT_FOCUS_LOST:
+                    case SDL_WINDOWEVENT_MINIMIZED:
+                        if (window != Device.m_sdlWnd)
+                            Device.OnWindowActivate(window, false);
+                        else
+                        {
+                            canCallActivate = true;
+                        }
+                        continue;
+                    } // switch (event.window.event)
+                }
+                } // switch (event.type)
 
-            // Only process event in Device
-            // if it wasn't processed in the switch above
-            Device.ProcessEvent(event);
-        } // for (int i = 0; i < count; ++i)
+                // Only process event in Device
+                // if it wasn't processed in the switch above
+                Device.ProcessEvent(event);
+            } // for (int i = 0; i < count; ++i)
+        } // while (queued window events)
 
-        // Workaround for screen blinking when there's too much timeouts
+        // Events describe past transitions, not the current window state.
+        // In particular, a stale FOCUS_LOST after a loading-time display reset
+        // must not minimize a window that has already regained input focus.
         if (canCallActivate)
         {
+            const Uint32 flags = SDL_GetWindowFlags(Device.m_sdlWnd);
+            const bool shouldActivate = (flags & SDL_WINDOW_INPUT_FOCUS) != 0 &&
+                (flags & (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED)) == 0;
             Device.OnWindowActivate(Device.m_sdlWnd, shouldActivate);
         }
 
