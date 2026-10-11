@@ -345,6 +345,17 @@ bool CHW::CreateSwapChain2(HWND hwnd)
     if (strstr(Core.Params, "-no_dx11_2"))
         return false;
 
+    // Keep exclusive fullscreen on the traditional DXGI swap chain. SDL's
+    // fullscreen display-mode handling and flip-discard presentation can lose
+    // scanout ownership after a level-load reset while input remains active.
+    // Flip presentation is still needed for unthrottled windowed/borderless
+    // rendering; exclusive fullscreen does not have the compositor limitation.
+    if (ThisInstanceIsGlobal() && psDeviceMode.WindowStyle == rsFullscreen)
+    {
+        Msg("* DX11: using traditional swap chain for exclusive fullscreen");
+        return false;
+    }
+
     ZoneScoped;
 
 #ifdef HAS_DX11_2
@@ -495,6 +506,30 @@ void CHW::Reset()
     ZoneScoped;
     DXGI_SWAP_CHAIN_DESC& cd = m_ChainDesc;
     const bool bWindowed = ThisInstanceIsGlobal() ? psDeviceMode.WindowStyle != rsFullscreen : true;
+    // Also handle switching from borderless/windowed to exclusive fullscreen
+    // in the options menu. Reset's caller has released render-target references.
+    if (!bWindowed && UsingFlipPresentationModel())
+    {
+        const HWND hwnd = cd.OutputWindow;
+        CHK_DX(m_pSwapChain->SetFullscreenState(FALSE, nullptr));
+        for (auto* context : d3d_contexts_pool)
+            if (context)
+                context->ClearState();
+#ifdef HAS_DX11_2
+        _RELEASE(m_pSwapChain2);
+#endif
+        _RELEASE(m_pSwapChain);
+        // D3D11 defers destruction; retire the old HWND swap chain before
+        // creating its replacement on the same window.
+        get_context(IMM_CTX_ID)->Flush();
+        if (ThisInstanceIsGlobal())
+            Device.PresentationFinished = nullptr;
+        R_ASSERT2(CreateSwapChain(hwnd), "Failed to create exclusive fullscreen swap chain");
+        CurrentBackBuffer = 0;
+        doPresentTest = false;
+        Msg("* DX11: switched to traditional exclusive fullscreen swap chain");
+        return;
+    }
     cd.Windowed = bWindowed;
     m_pSwapChain->SetFullscreenState(!bWindowed, NULL);
     DXGI_MODE_DESC& desc = m_ChainDesc.BufferDesc;
@@ -504,6 +539,9 @@ void CHW::Reset()
     CHK_DX(m_pSwapChain->ResizeTarget(&desc));
     CHK_DX(m_pSwapChain->ResizeBuffers(
         cd.BufferCount, desc.Width, desc.Height, desc.Format, cd.Flags));
+    BOOL fullscreen = FALSE;
+    CHK_DX(m_pSwapChain->GetFullscreenState(&fullscreen, nullptr));
+    Msg("* DX11 reset: swap effect=%u, exclusive fullscreen=%d", cd.SwapEffect, fullscreen);
 }
 
 void CHW::SetPrimaryAttributes(u32& /*windowFlags*/)
