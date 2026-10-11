@@ -20,6 +20,7 @@
 #include "SleepEffector.h"
 #include "character_info.h"
 #include "CustomOutfit.h"
+#include "CustomZone.h"
 #include "ActorCondition.h"
 #include "UIGameCustom.h"
 #include "xrPhysics/matrix_utils.h"
@@ -481,6 +482,12 @@ struct playing_pred
     IC bool operator()(ref_sound& s) { return (NULL != s._feedback()); }
 };
 
+static bool HasAnomalyPainHealthLoss(float health_before, float health_after, float max_health)
+{
+    const float health_lost = health_before - health_after;
+    return max_health > 0.0f && health_lost > 0.0f && health_lost + EPS_S >= 0.05f * max_health;
+}
+
 void CActor::Hit(SHit* pHDS)
 {
     bool b_initiated = pHDS->aim_bullet; // physics strike by poltergeist
@@ -539,35 +546,48 @@ void CActor::Hit(SHit* pHDS)
         last_hit_frame = Device.dwFrame;
     };
 
-    if (!GEnv.isDedicatedServer && !sndHit[HDS.hit_type].empty() && conditions().PlayHitSound(pHDS))
+    // Environmental hits may be completely absorbed. Wait for the final health
+    // change, including artefacts, scripts, armor, immunities and invulnerability.
+    const bool defer_anomaly_pain = IsGameTypeSingle() &&
+        (HDS.hit_type == ALife::eHitTypeBurn || HDS.hit_type == ALife::eHitTypeLightBurn ||
+         HDS.hit_type == ALife::eHitTypeChemicalBurn || HDS.hit_type == ALife::eHitTypeShock ||
+         HDS.hit_type == ALife::eHitTypeRadiation || HDS.hit_type == ALife::eHitTypeTelepatic ||
+         smart_cast<CCustomZone*>(HDS.who));
+    const auto play_hit_sound = [&]()
     {
-        ref_sound& S = sndHit[HDS.hit_type][Random.randI(sndHit[HDS.hit_type].size())];
-        bool b_snd_hit_playing = sndHit[HDS.hit_type].end() !=
-            std::find_if(sndHit[HDS.hit_type].begin(), sndHit[HDS.hit_type].end(), playing_pred());
+        if (!GEnv.isDedicatedServer && !sndHit[HDS.hit_type].empty() && conditions().PlayHitSound(defer_anomaly_pain ? &HDS : pHDS))
+        {
+            ref_sound& S = sndHit[HDS.hit_type][Random.randI(sndHit[HDS.hit_type].size())];
+            bool b_snd_hit_playing = sndHit[HDS.hit_type].end() !=
+                std::find_if(sndHit[HDS.hit_type].begin(), sndHit[HDS.hit_type].end(), playing_pred());
 
-        if (ALife::eHitTypeExplosion == HDS.hit_type)
-        {
-            if (this == Level().CurrentControlEntity())
+            if (ALife::eHitTypeExplosion == HDS.hit_type)
             {
-                S.set_volume(10.0f);
-                if (!m_sndShockEffector)
+                if (this == Level().CurrentControlEntity())
                 {
-                    m_sndShockEffector = xr_new<SndShockEffector>();
-                    m_sndShockEffector->Start(this, float(S.get_length_sec() * 1000.0f), HDS.damage());
+                    S.set_volume(10.0f);
+                    if (!m_sndShockEffector)
+                    {
+                        m_sndShockEffector = xr_new<SndShockEffector>();
+                        m_sndShockEffector->Start(this, float(S.get_length_sec() * 1000.0f), HDS.damage());
+                    }
                 }
+                else
+                    bPlaySound = false;
             }
-            else
-                bPlaySound = false;
+            if (bPlaySound && !b_snd_hit_playing)
+            {
+                Fvector point = Position();
+                point.y += CameraHeight();
+                S.play_at_pos(this, point);
+            }
+            if (S.get_length_sec() > default_feedback_duration)
+                feedback_duration = S.get_length_sec();
         }
-        if (bPlaySound && !b_snd_hit_playing)
-        {
-            Fvector point = Position();
-            point.y += CameraHeight();
-            S.play_at_pos(this, point);
-        }
-        if (S.get_length_sec() > default_feedback_duration)
-            feedback_duration = S.get_length_sec();
-    }
+    };
+
+    if (!defer_anomaly_pain)
+        play_hit_sound();
 
     float high_freq_feedback = clampr(HDS.damage(), 0.f, 1.f);
     if (high_freq_feedback < 0.01f)
@@ -701,7 +721,13 @@ void CActor::Hit(SHit* pHDS)
                 HDS.boneID
             );
         }
+        const float health_before_hit = conditions().GetHealth();
         inherited::Hit(&HDS);
+        if (defer_anomaly_pain && HasAnomalyPainHealthLoss(
+                health_before_hit, conditions().GetHealth(), conditions().GetMaxHealth()))
+        {
+            play_hit_sound();
+        }
     }
     else
     {

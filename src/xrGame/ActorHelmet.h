@@ -46,6 +46,7 @@ public:
 
 protected:
     mutable HitImmunity::HitTypeSVec m_HitTypeProtection;
+    bool m_useFullHitTypeProtection{};
     SBoneProtections* m_boneProtection;
 
 protected:

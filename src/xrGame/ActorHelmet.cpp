@@ -21,6 +21,8 @@ void CHelmet::Load(LPCSTR section)
 {
     inherited::Load(section);
 
+    m_useFullHitTypeProtection = pSettings->read_if_exists<bool>(section, "use_full_hit_type_protection", false);
+
     m_HitTypeProtection[ALife::eHitTypeBurn] = pSettings->r_float(section, "burn_protection");
     m_HitTypeProtection[ALife::eHitTypeStrike] = pSettings->r_float(section, "strike_protection");
     m_HitTypeProtection[ALife::eHitTypeShock] = pSettings->r_float(section, "shock_protection");
@@ -244,6 +246,18 @@ void CHelmet::AddBonesProtection(LPCSTR bones_section)
 float CHelmet::HitThroughArmor(float hit_power, s16 element, float ap, bool& add_wound, ALife::EHitType hit_type)
 {
     float NewHitPower = hit_power;
+
+    // Dead Air uses full, condition-scaled protection for non-bullet hits.
+    // Keep this opt-in: stock CS/COP use different scales and bone coefficients.
+    if (m_useFullHitTypeProtection && hit_type != ALife::eHitTypeFireWound)
+    {
+        NewHitPower -= GetDefHitTypeProtection(hit_type);
+        if (NewHitPower < 0.0f)
+            NewHitPower = 0.0f;
+
+        Hit(hit_power, hit_type);
+        return NewHitPower;
+    }
 
     switch (m_boneProtection->m_hitFracType)
     {
