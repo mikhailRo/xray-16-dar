@@ -14,6 +14,7 @@
 #include "xrScriptEngine/script_space.hpp"
 
 #include <SDL.h>
+#include "FrameLimiter.h"
 
 ENGINE_API CRenderDevice Device;
 ENGINE_API CLoadScreenRenderer load_screen_renderer;
@@ -267,7 +268,7 @@ void CRenderDevice::ProcessFrame()
     if (!BeforeFrame())
         return;
 
-    const u64 frameStartTime = TimerGlobal.GetElapsed_ms();
+    const auto frameStartTime = std::chrono::steady_clock::now();
 
     FrameMove();
 
@@ -286,19 +287,17 @@ void CRenderDevice::ProcessFrame()
 
     TaskScheduler->Wait(processSeqParallel);
 
-    const u64 frameEndTime = TimerGlobal.GetElapsed_ms();
-    const u64 frameTime = frameEndTime - frameStartTime;
-
-    u32 updateDelta = 1000 / ps_fps_limit;
+    int fpsLimit = ps_fps_limit;
 
     if (GEnv.isDedicatedServer)
-        updateDelta = 1000 / g_svDedicateServerUpdateReate;
-
+        fpsLimit = g_svDedicateServerUpdateReate;
     else if (Paused() || g_pGameLevel == nullptr)
-        updateDelta = 1000 / ps_fps_limit_in_menu;
+        fpsLimit = ps_fps_limit_in_menu;
 
-    if (frameTime < updateDelta)
-        Sleep(updateDelta - frameTime);
+    // Preserve fractional frame durations (144 FPS is 6.944 ms, not 6 ms).
+    const auto frameDuration = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<double>(1.0 / fpsLimit));
+    WaitForFrameDeadline(frameStartTime + frameDuration);
 
     if (!b_is_Active)
         Sleep(1);
